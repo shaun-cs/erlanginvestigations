@@ -1,0 +1,187 @@
+
+Shell
+-----
+Emacs
+
+CTRL-A : beginning of line
+CTRL-E : end of line
+
+help : start to type mnemonic - e.g. 'li' for 'lists' - and press tab : will auto complete
+       press tab again to see all available methods
+       type help(). for shell commands
+
+CTRL-G : shell control commands - press 'h' for available operations
+
+Frozen shell : CTRL-G i c - i.e. enter shell manager, interrupt job, reconnect to job
+
+Erasing variables : f(). - erase all; f(Variable). - erase specific variable (only works in shell).
+
+Language
+--------
+
+Variable begin with upper case; can be assigned to (bound) once.
+'=' is the comparison operator; it will assign to an unbound variable, so that comparison can continue.
+'_' means a variable that you do not care about.
+
+Atoms are constants, whose only value is their name (literals):
+- enclose in single quotes (') if not beginning with lowercase letter or contains non-alphanumeric chars.
+- an ordinary atom, wrapped in single quotes, is the same as an atom without them - i.e. atom = 'atom'
+Note: atoms are not garbage collected; they are stored in a table, consuming 4B (32bits) or 8B (64bits), which will accumulate over years, so don't generate them dynamically.
+
+Booleans: 'and' and 'or' evaluate both sides; use 'andalso' or 'orelse' for short-circuiting.
+=:= boolean equal
+=/= boolean not equal
+There is a distinction between floats and integers when testing for equality:
+== and /= will test without distinction
+>= greater than or equal
+=< less than or equal
+You can compare different types - e.g. 5 =:= true. -> false
+'true' and 'false' are atoms, not values. Therefore 0 does not equal false.
+atom < reference < fun < port < pid < tuple < list < bit string
+
+Tuples: demarcated with {} 
+
+Lists:
+++ postpend right list to left list
+-- remove items in left list from right list (non-matchers are ignored)
+both operands are right-associative
+First element is named Head and can be extracted with hd([])
+Rest of list is named Tail and can be extracted with tl([])
+length([]) gives the length of the list.
+[Head|Tail] gives pattern matching extraction and construction - '|' is the cons(tructor) operator, and can be used recursively in lists.
+You can even do this: [_,X|Tail] if you wanted to match and access the second item in a list.
+Note: proper lists in erlang should always have a list in their tail, and not a single item (which will cause built-ins like length() to fail)
+List comprehensions are ways to build or modify lists - essentially, the concept is taken from set notation.
+|| is the colon in normal set notation - e.g. {2n : n € L} becomes [2*N || N <- [1,2,3,4]].
+Constraints can be added to list comprehensions - e.g. [X || X <- [1,2,3,4,5,6], X rem 2 =:= 0]. for all even numbers
+There can be multiple such conditions, all separated by commas.
+You can have more than one generator, also separated by commas - e.g. [X+Y || X <- [1,2], Y <- [3,4]]. - [4,5,5,6]
+Generators can be couple with pattern matching to form filters - e.g. [X || {X,fog} <- Weather].
+
+Binary Data: enclosed between << and >>, with data separated by commas, normally on byte boundaries.
+<<R:8,G:8,B:8>> = <<Pix1:24>>.
+<<R:8, Rest/binary>> = Pixels. - equivalent of [Head|Tail]
+Type specifiers can be added for Type, Signedness, and Endianness, and Unit for byte alignment
+bitshift operators : bsl, bsr, band, bor, bxor, bnot - e.g. 2#00010 bsl 1. results in 2#00100
+Note: erlang is slow at number crunching compared to C/C++ so don't video/image conversion using it.
+It's strength is in reacting to events, message passing - i.e. soft real-time applications.
+
+Binary Strings: more like C arrays than linked lists (the other way of doing strings in erlang - which is more expensive in terms of space)
+syntax: <<"this is a binary string!">>
+Note: becomes complex when pattern matching or manipulating.
+Typically used for constant text storage, or when space is a real issue.
+If you want identifiers, use atoms instead of strings: atom comparison is constant time, irrespective of length; but when splitting or regular expressions are needed, atoms cannot be used - they can only be compared.
+
+Binary Comprehensions: << <<X>> || <<X>> <= <<1,2,3,4,5>>, X rem 2 == 0>>. Note the change of '<-' to <='
+e.g. for pixel extraction:
+Pixels =<<213,45,etc,etc>>
+RGB = [ {R,G,B} || <<R:8,G:8,B:8>> <= Pixels ]. - which will produce a list of tuples: i.e. changes binary data into integers, inside tuples, stored in a list.
+The reverse is:
+<< <<R:8,G:8,B:8>> || {R,G,B} <- RGB >>.
+Note: the elements of the resulting binary require a clearly defined binary type (as above) - i.e. you could write <<Bin/binary>> for <<R:8,G:8,B:8>>
+(see p.29 for more details and link to paper).
+
+Modules:
+Attributes:
+-module(name). - must correspond to filename.erl
+-export([function/arity,etc,...]). - 'arity' is an integer representing the number of arguments
+Comments:
+%%% purpose of module and section divisions (public, private, helpers)
+%% code comments
+% end of code-line comments
+-import(module,[function1/arity,function2/arity]) - then you can call module functions without their namespace: e.g. format() instead of io:format()
+Note: import is discouraged as it ruins readability. Typically, just the module lists is imported because of the high frequency of its use.
+Compiling:
+command line: erlc flags file.erl
+module or shell: compile:file(file.erl).
+shell: c(modulename).
+Compiled modules have the suffix .beam (bogdan/björn's erlang abstract machine)
+Erlang functions must return something, so even when they don't intentionally, they return ok.
+Flags:
+-debug_info
+-{outdir,Dir}
+-export_all
+-{d,macro} or -d{d,macro,Value}
+They can be added to a module, e.g. -compile([debug_info,export_all]).
+To use a macro in code: ?HOUR
+To define such a macro: -define(HOUR, 3600).%in seconds
+Function macro: -define(sub(X,Y), X-Y).
+Then calling ?sub(23,47) will result in 23-47 being substituted in your code.
+Predefined macros:
+?MODULE - current module name as an atom
+?FILE - current filename as a string
+?LINE - line number where macro is placed
+Conditional Macros:
+-ifdef(DEBUGMODE).
+-define(DEBUG(S), io:format("dbg: "++S)).
+-else.
+-define(DEBUG(S),ok).
+-endif.
+Usage: ?DEBUG("some debug statement").
+Another usage:
+-ifdef(TEST).
+my_test_function() ->
+	run_some_tests().
+-endif.
+Compiling then as: c(module, [{d,'TEST'},{d,'DEBUGMODE'}]).
+Metadata is stored - when compiling - into a function called module_info/0 and module_info/1 which will display specific metadata.
+
+Functions:
+- have a declarative style:
+function(X) ->
+	Expression;
+function(Y) ->
+	Expression;
+function(_) ->
+	Expression.
+
+io:format
+tilde ~ denotes a token
+~n newline
+~s string (normal and binary)
+~p print erlang term
+~f float
+~ escape reserved character
+
+Guards:
+- must return true to succeed: false or exception will fail guard
+- guard statements can be combined: 
+	‘,’ means ‘and also’ (catching exceptions as they occur)
+	’;’ means ‘or else’ (traversing all statements, even if exceptions occur)
+- guards can be made of comparisons, boolean evaluations, maths operations, functions about data type (e.g. is_integer/1)
+- guards will not accept user defined functions (reason: cannot be guaranteed to be side-effect free)
+
+If clauses:
+- called ‘guard patterns’; they share guard syntax
+if guard ->
+	statement
+end,
+if guard ->
+	statement
+end;
+true ->
+	statement
+Note: there must be one branch that will always succeed, an equivalent of ‘else’ in other languages, provided by ‘true’
+Variable = if 	match -> return;
+		match2 -> return2;
+		match3 -> return3;
+		true -> return4
+	    end,
+{Variable}.
+
+Case:
+case statement of
+	true -> statement;
+	false -> statement
+end.
+
+case statement of
+	match when guard -> statement;
+	match when guard -> statement;
+	_ -> statment
+end.
+
+Choices:
+- the difference between matching function calls and case statements is minimal: same performance cost
+- if was added late to language as a shortcut from writing so much pattern matching	
+
